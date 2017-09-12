@@ -54,6 +54,8 @@
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Deployment" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -73,6 +75,13 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BandMaximiser.vb" />
+    <Compile Include="CorridorViewForm.Designer.vb">
+      <DependentUpon>CorridorViewForm.vb</DependentUpon>
+    </Compile>
+    <Compile Include="CorridorViewForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="CorridorViewer.vb" />
     <Compile Include="m_main.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
@@ -91,6 +100,9 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="CorridorViewForm.resx">
+      <DependentUpon>CorridorViewForm.vb</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="My Project\Resources.resx">
       <Generator>VbMyResourcesResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.vb</LastGenOutput>

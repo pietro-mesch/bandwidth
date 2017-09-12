@@ -1,4 +1,6 @@
-﻿Imports Microsoft.SolverFoundation.Common
+﻿Option Strict On
+
+Imports Microsoft.SolverFoundation.Common
 Imports Microsoft.SolverFoundation.Solvers
 
 Public Class BandMaximiser
@@ -54,10 +56,10 @@ Public Class BandMaximiser
 
 
     Public Sub New(ByVal cycl As Double, ByVal trav As Double(),
-                                  ByVal gini As Double(), ByVal gend As Double(),
+                                  ByVal gini As Integer(), ByVal gend As Integer(),
                    Optional ByVal trav2 As Double() = Nothing,
-                   Optional ByVal gini2 As Double() = Nothing,
-                   Optional ByVal gend2 As Double() = Nothing)
+                   Optional ByVal gini2 As Integer() = Nothing,
+                   Optional ByVal gend2 As Integer() = Nothing)
         'PM CHECK INPUT
         If cycl <= 0 Then
             Throw New ArgumentOutOfRangeException
@@ -86,7 +88,7 @@ Public Class BandMaximiser
 
         'TRAVEL TIMES
         _t = trav
-        If trav2 Is Nothing Then trav2 = trav
+        If trav2 Is Nothing Then trav2 = trav.Select(Function(x) -x).ToArray
         _t2 = trav2
 
         'IF ONLY ONE SET OF GINIGEND WAS PROVIDED, ASSUME THAT THE THROUGH PHASE SERVES BOTH DIRECTIONS
@@ -130,8 +132,8 @@ Public Class BandMaximiser
 
 #If DEBUG Then
         Console.WriteLine("One Way Bandwidth Optimisation, fixed travel times, {0} junctions.", n)
-        Dim time As New Stopwatch
-        time.Start()
+        'Dim time As New Stopwatch
+        'time.Start()
 #End If
 
         Dim solver As New SimplexSolver()
@@ -182,9 +184,9 @@ Public Class BandMaximiser
         Next
 
 #If DEBUG Then
-        time.Stop()
+        'time.Stop()
         Console.WriteLine("Green duration : min = {0} s , MAX = {1} s", _g.Min, _g.Max)
-        Console.WriteLine("Solution time : {0} ms", time.ElapsedMilliseconds)
+        'Console.WriteLine("Solution time : {0} ms", time.ElapsedMilliseconds)
         Console.WriteLine("Bandwidth : {0} s [{1:0.0%}]", _B, _B / _g.Min)
         Console.WriteLine("OFFSET VALUES:")
         For j As Integer = 0 To n - 1
@@ -194,7 +196,7 @@ Public Class BandMaximiser
         Console.WriteLine("")
 #End If
 
-        time = Nothing
+        'time = Nothing
 
         Return offs
     End Function
@@ -205,7 +207,7 @@ Public Class BandMaximiser
     ''' </summary>
     ''' <param name="secondary_direction_weight"> the weight of the secondary bandwidth in the optimisation (0,1) </param>
     ''' <returns></returns>
-    Public Function TwoWayOffsets(Optional ByVal secondary_direction_weight As Double = 0.2) As Double()
+    Public Function TwoWayOffsets(Optional ByVal secondary_direction_weight As Double = 0.1) As Double()
         Dim offs(n - 1) As Double
 
         If secondary_direction_weight > 1 Then Throw New ArgumentOutOfRangeException("The secondary bandwidth weight cannot be more than 1")
@@ -226,8 +228,8 @@ Public Class BandMaximiser
 
 #If DEBUG Then
         Console.WriteLine("Two Way Bandwidth Optimisation, fixed travel times, {0} junctions.", n)
-        Dim time As New Stopwatch
-        time.Start()
+        'Dim time As New Stopwatch
+        'time.Start()
 #End If
 
         Dim solver As New SimplexSolver()
@@ -278,9 +280,9 @@ Public Class BandMaximiser
         'the bandwidth (objective function)
         Dim bandwidth As Integer
         solver.AddRow("two way bandwidth", bandwidth)
-
         solver.SetCoefficient(bandwidth, b, 1 - secondary_direction_weight)
-        solver.SetCoefficient(bandwidth, b2, secondary_direction_weight)
+        'PM REACTIVATE
+        'solver.SetCoefficient(bandwidth, b2, secondary_direction_weight)
         solver.AddGoal(bandwidth, 1, False)
 
         'solve the linear problem
@@ -288,7 +290,8 @@ Public Class BandMaximiser
 
         'extract values
         _B = solver.GetValue(b).ToDouble
-        _B2 = solver.GetValue(b2).ToDouble
+        'PM REACTIVATE
+        '_B2 = solver.GetValue(b2).ToDouble
         Dim w0 As Double = solver.GetValue(w(0)).ToDouble
         Dim to0 As Double = _t_o(0)
         For j As Integer = 0 To n - 1
@@ -297,9 +300,9 @@ Public Class BandMaximiser
         Next
 
 #If DEBUG Then
-        time.Stop()
+        'time.Stop()
         Console.WriteLine("Green duration : min = {0} s , MAX = {1} s", _g.Min, _g.Max)
-        Console.WriteLine("Solution time : {0} ms", time.ElapsedMilliseconds)
+        'Console.WriteLine("Solution time : {0} ms", time.ElapsedMilliseconds)
         Console.WriteLine("Bandwidth 1 : {0} s [{1:0.0%}]", _B, _B / _g.Min)
         Console.WriteLine("Bandwidth 2 : {0} s [{1:0.0%}]", _B2, _B2 / _g2.Min)
         Console.WriteLine("OFFSET VALUES:")
@@ -310,7 +313,7 @@ Public Class BandMaximiser
         Console.WriteLine("")
 #End If
 
-        time = Nothing
+        'time = Nothing
 
         Return offs
     End Function
@@ -338,7 +341,7 @@ Public Class BandMaximiser
 
     Private Function Sum(ByVal values As Double(), ByVal from_index As Integer, ByVal to_index As Integer) As Double
 
-        Dim tot As Integer = 0
+        Dim tot As Double = 0
 
         If from_index >= 0 AndAlso from_index <= n - 1 _
             AndAlso to_index >= 0 AndAlso to_index <= n - 1 Then
@@ -355,7 +358,7 @@ Public Class BandMaximiser
 
     End Function
 
-    Private Function ComputeGreenDuration(ByVal gini As Double(), ByVal gend As Double()) As Double()
+    Private Function ComputeGreenDuration(ByVal gini As Integer(), ByVal gend As Integer()) As Double()
         Dim duration(n - 1) As Double
         For j As Integer = 0 To n - 1
             duration(j) = gend(j) - gini(j)
@@ -368,7 +371,7 @@ Public Class BandMaximiser
         Return duration
     End Function
 
-    Private Function ComputeAbsoluteOffsets(ByVal gini As Double(), ByVal gend As Double()) As Double()
+    Private Function ComputeAbsoluteOffsets(ByVal gini As Integer(), ByVal gend As Integer()) As Double()
         Dim midpoint As Double
         Dim offset(n - 1) As Double
         For j As Integer = 0 To n - 1
@@ -399,7 +402,7 @@ Public Class BandMaximiser
     ''' <param name="gini2"></param>
     ''' <param name="gend2"></param>
     ''' <returns></returns>
-    Private Function ComputeInternalOffsets(ByVal gini As Double(), ByVal gend As Double(), ByVal gini2 As Double(), ByVal gend2 As Double()) As Double()
+    Private Function ComputeInternalOffsets(ByVal gini As Integer(), ByVal gend As Integer(), ByVal gini2 As Integer(), ByVal gend2 As Integer()) As Double()
 
         Dim offset As Double() = ComputeAbsoluteOffsets(gini, gend)
         Dim offset2 As Double() = ComputeAbsoluteOffsets(gini2, gend2)
@@ -407,7 +410,7 @@ Public Class BandMaximiser
         Dim internal(n - 1) As Double
 
         For i As Integer = 0 To n - 1
-            internal(i) = modC(offset2(i) - offset(i) + If(i > 0, Sum(_t, 0, i - 1) - Sum(_t2, 0, i - 1), 0))
+            internal(i) = modC(modC(offset2(i) - offset(i)) + If(i > 0, Sum(_t, 0, i - 1) - Sum(_t2, 0, i - 1), 0))
         Next
 
         Return internal
