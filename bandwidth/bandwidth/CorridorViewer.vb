@@ -1,9 +1,8 @@
 ﻿Option Strict On
 
-Imports System.Windows.Forms
 Imports System.Drawing
-Imports System.Linq
-Imports System.Math
+Imports System.Drawing.Drawing2D
+Imports System.Windows.Forms
 
 Public Class CorridorViewer
 #Region "DECLARATIONS"
@@ -33,7 +32,7 @@ Public Class CorridorViewer
         _theCorridor = corridor(corridorIndex)
         _plotBox = pictureBox
         SetPlotBoxSize()
-
+        GREEN_BAND_BRUSH = SubdueBrush(Brushes.DarkGreen, 0.5 / (_theCorridor.njunc - 1))
         'GetActiveSignalProgram()
 
     End Sub
@@ -51,6 +50,7 @@ Public Class CorridorViewer
     Private GREEN_BAR_BRUSH As Brush = Brushes.DarkGreen
     Private AMBER_BAR_BRUSH As Brush = Brushes.Gold
     Private RED_BAR_BRUSH As Brush = Brushes.Red
+    Private GREEN_BAND_BRUSH As Brush
 
 #End Region
 
@@ -381,9 +381,10 @@ Public Class CorridorViewer
     ''' </summary>
     Private Sub PlotJunctionPrograms()
 
-        For i As Integer = 0 To _theCorridor.njunc - 1
-            PlotThroughPhases(i)
+        For i As Integer = 0 To 0
+            'For i As Integer = 0 To _theCorridor.njunc - 1
             PlotGreenBands(i)
+            PlotThroughPhases(i)
         Next
 
     End Sub
@@ -401,14 +402,47 @@ Public Class CorridorViewer
 
     Private Sub PlotGreenBands(ByVal junc_internal_index As Integer)
         'forward
-        Dim A, B, C, D As Point
-        For i As Integer = junc_internal_index + 1 To _theCorridor.njunc - 1
-            'look for the parallelogram ABCD representing the green band between this junction and the next
-            'A and B normally lie on this junction's time axis, C and D on the next
+        Dim from_start, from_end, to_start, to_end As Double
+        'initialise forward band limits
+        from_start = _theCorridor.gini(junc_internal_index)
+        from_end = _theCorridor.gend(junc_internal_index)
+        If from_start > from_end Then from_end += _theCorridor.cycl
 
-            'Dim parallelograms As Region() = GetGreenBands(t1, t2, thickness, _theCorridor.cycl, A, B, position)
+        For i As Integer = junc_internal_index + 1 To _theCorridor.njunc - 2
+            'endpoints
+            Dim A As New Point(INNER_PADDING.Left, GetBaselineVerticalPosition(junc_internal_index))
+            Dim B As New Point(_plotBox.Width - INNER_PADDING.Right, GetBaselineVerticalPosition(junc_internal_index))
+            Dim C As New Point(INNER_PADDING.Left, GetBaselineVerticalPosition(junc_internal_index + 1))
+            Dim D As New Point(_plotBox.Width - INNER_PADDING.Right, GetBaselineVerticalPosition(junc_internal_index + 1))
+
+            'initialise backward band limits
+            to_start = _theCorridor.gini(junc_internal_index + 1)
+            to_end = _theCorridor.gend(junc_internal_index + 1)
+            If to_start > to_end Then to_start -= _theCorridor.cycl
+
+            Dim parallelograms As Region() = GetGreenBands(from_start, from_end, to_start, to_end, A, B, C, D, _theCorridor.trav(junc_internal_index))
+            _g.FillRegion(GREEN_BAND_BRUSH, parallelograms(0))
         Next
     End Sub
+
+    Private Function GetGreenBands(ByVal from_start As Double, ByVal from_end As Double, ByVal to_start As Double, ByVal to_end As Double,
+                                   ByVal A As Point, ByVal B As Point, ByVal C As Point, ByVal D As Point, ByVal travel_time As Double) As Region()
+
+        Dim fwd(1) As Region
+        Dim x1 As Integer = CInt(A.X + (B.X - A.X) * from_start / _theCorridor.cycl)
+        Dim x2 As Integer = CInt(A.X + (B.X - A.X) * from_end / _theCorridor.cycl)
+        Dim x3 As Integer = CInt(x1 + (B.X - A.X) * travel_time / _theCorridor.cycl)
+        Dim x4 As Integer = CInt(x2 + (B.X - A.X) * travel_time / _theCorridor.cycl)
+
+        'fwd(0) = New Region(New GraphicsPath({New Point(x1, A.Y), New Point(x2, A.Y), New Point(x4, A.Y), New Point(x3, A.Y)},
+        '                                     {0, 1, 1, 128}))
+        Dim path As New GraphicsPath
+        path.AddPolygon({New Point(x1, A.Y), New Point(x2, A.Y), New Point(x4, C.Y), New Point(x3, C.Y)})
+        path.CloseFigure()
+        fwd(0) = New Region(path)
+        Return fwd
+
+    End Function
 
     ''' <summary>
     ''' Plots a bar representing the signal group status duration over the program cycle
@@ -499,9 +533,9 @@ Public Class CorridorViewer
         _g.FillRectangles(brush, r)
     End Sub
 
-    Private Function SubdueBrush(ByVal br As Brush) As Brush
+    Private Function SubdueBrush(ByVal br As Brush, Optional ByVal alpha As Double = 0.6) As Brush
         Dim c As Color = New Pen(br).Color
-        Dim A As Integer = CInt(c.A * 0.6)
+        Dim A As Integer = CInt(c.A * alpha)
         Dim R As Integer = c.R
         Dim G As Integer = c.G
         Dim B As Integer = c.B
