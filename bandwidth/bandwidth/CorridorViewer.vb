@@ -8,6 +8,7 @@ Public Class CorridorViewer
 #Region "DECLARATIONS"
     'Private WithEvents _theViewer As TDE_Viewer = TDE_Viewer.Itself
     Private WithEvents _plotBox As PictureBox
+    Private _plotAreaMask As Region
 
     Private _backgroundBitmap As Bitmap
     Private _g As Graphics
@@ -32,7 +33,7 @@ Public Class CorridorViewer
         _theCorridor = corridor(corridorIndex)
         _plotBox = pictureBox
         SetPlotBoxSize()
-        GREEN_BAND_BRUSH = SubdueBrush(Brushes.DarkGreen, 0.5 / (_theCorridor.njunc - 1))
+        GREEN_BAND_BRUSH = SubdueBrush(Brushes.DarkGreen, 0.8 / (_theCorridor.njunc - 1))
         'GetActiveSignalProgram()
 
     End Sub
@@ -178,26 +179,16 @@ Public Class CorridorViewer
             _juncBoxes(i) = New RectangleF(New Point(0, (ROW_HEIGHT + ROW_SPACING) * (i - 1) + INNER_PADDING.Top), New Size(_plotBox.Width, ROW_HEIGHT))
         Next
 
+        Dim path As New GraphicsPath
+        path.AddPolygon({New Point(INNER_PADDING.Left, INNER_PADDING.Top),
+                        New Point(_plotBox.Width - INNER_PADDING.Right, INNER_PADDING.Top),
+                        New Point(_plotBox.Width - INNER_PADDING.Right, _plotBox.Height - INNER_PADDING.Bottom - TIME_AXIS_HEIGHT),
+                        New Point(INNER_PADDING.Left, _plotBox.Height - INNER_PADDING.Bottom - TIME_AXIS_HEIGHT)})
+        path.CloseFigure()
+        _plotAreaMask = New Region(path)
+
     End Sub
-    'PM REM
-    'Private Function Sum(ByVal values As Double(), ByVal from_index As Integer, ByVal to_index As Integer) As Double
 
-    '    Dim tot As Double = 0
-
-    '    If from_index >= 0 AndAlso from_index <= values.Length - 1 _
-    '        AndAlso to_index >= 0 AndAlso to_index <= values.Length - 1 Then
-
-    '        For i As Integer = from_index To to_index
-    '            tot += values(i)
-    '        Next
-
-    '    Else
-    '        Throw New ArgumentOutOfRangeException
-    '    End If
-
-    '    Return tot
-
-    'End Function
 
     ''' <summary>
     ''' initialise the plot area and graphics handle
@@ -381,10 +372,12 @@ Public Class CorridorViewer
     ''' </summary>
     Private Sub PlotJunctionPrograms()
 
-        For i As Integer = 0 To 0
-            'For i As Integer = 0 To _theCorridor.njunc - 1
+        'For i As Integer = 0 To 0
+        For i As Integer = 0 To _theCorridor.njunc - 1
             PlotGreenBands(i)
             PlotThroughPhases(i)
+            'PM REM
+            _plotBox.Refresh()
         Next
 
     End Sub
@@ -399,49 +392,188 @@ Public Class CorridorViewer
         PlotStatusBar(junc_internal_index, _theCorridor.gini2(junc_internal_index), _theCorridor.gend2(junc_internal_index), VissigSignalState.Green, True)
 
     End Sub
-
+    ''' <summary>
+    ''' Plot the forward and backward green band from the current junction green phase.
+    ''' </summary>
+    ''' <param name="junc_internal_index">The zero based junction index in the corridor</param>
     Private Sub PlotGreenBands(ByVal junc_internal_index As Integer)
-        'forward
-        Dim from_start, from_end, to_start, to_end As Double
-        'initialise forward band limits
-        from_start = _theCorridor.gini(junc_internal_index)
-        from_end = _theCorridor.gend(junc_internal_index)
-        If from_start > from_end Then from_end += _theCorridor.cycl
 
-        For i As Integer = junc_internal_index + 1 To _theCorridor.njunc - 2
+        Dim parallelograms As GraphicsPath
+        Dim plotshape As Region
+
+        'DRAW THE GREEN BAND FROM THIS JUNCTION
+        'Forwards: the green band experienced by anyone leaving during this junction's green for th erest of the corridor
+        'Backwards: the green corridor that leads to this green phase
+
+        'FORWARDS GREEN BAND
+        'initialise forward band limits
+        Dim A, B, C, D As Double
+        A = _theCorridor.gini(junc_internal_index)
+        B = _theCorridor.gend(junc_internal_index)
+        If A > B Then B += _theCorridor.cycl
+
+        For i As Integer = junc_internal_index To _theCorridor.njunc - 2
             'endpoints
-            Dim A As New Point(INNER_PADDING.Left, GetBaselineVerticalPosition(junc_internal_index))
-            Dim B As New Point(_plotBox.Width - INNER_PADDING.Right, GetBaselineVerticalPosition(junc_internal_index))
-            Dim C As New Point(INNER_PADDING.Left, GetBaselineVerticalPosition(junc_internal_index + 1))
-            Dim D As New Point(_plotBox.Width - INNER_PADDING.Right, GetBaselineVerticalPosition(junc_internal_index + 1))
+            Dim E1 As New Point(INNER_PADDING.Left, GetBaselineVerticalPosition(i))
+            Dim E2 As New Point(_plotBox.Width - INNER_PADDING.Right, GetBaselineVerticalPosition(i))
+            Dim E3 As New Point(INNER_PADDING.Left, GetBaselineVerticalPosition(i + 1))
+            Dim E4 As New Point(_plotBox.Width - INNER_PADDING.Right, GetBaselineVerticalPosition(i + 1))
 
             'initialise backward band limits
-            to_start = _theCorridor.gini(junc_internal_index + 1)
-            to_end = _theCorridor.gend(junc_internal_index + 1)
-            If to_start > to_end Then to_start -= _theCorridor.cycl
+            C = _theCorridor.gini(i + 1)
+            D = _theCorridor.gend(i + 1)
+            If C > D Then C -= _theCorridor.cycl
 
-            Dim parallelograms As Region() = GetGreenBands(from_start, from_end, to_start, to_end, A, B, C, D, _theCorridor.trav(junc_internal_index))
-            _g.FillRegion(GREEN_BAND_BRUSH, parallelograms(0))
+            parallelograms = GetGreenBands(A, B, C, D, E1, E2, E3, E4, _theCorridor.trav(i))
+
+            'if the band is interrupted, there's nothing else to do for this direction
+            If parallelograms Is Nothing Then Exit For
+
+            'plot
+            plotshape = New Region(parallelograms)
+            plotshape.Intersect(_plotAreaMask)
+            _g.FillRegion(GREEN_BAND_BRUSH, plotshape)
+
+            'update forward band limits to continue from previously limited band
+            A = C
+            B = D
         Next
+
+
+
+        'initialise back band limits
+        A = _theCorridor.gini(junc_internal_index)
+        B = _theCorridor.gend(junc_internal_index)
+        If A > B Then B += _theCorridor.cycl
+
+        For i As Integer = junc_internal_index To 1 Step -1
+            'endpoints
+            Dim E1 As New Point(INNER_PADDING.Left, GetBaselineVerticalPosition(i))
+            Dim E2 As New Point(_plotBox.Width - INNER_PADDING.Right, GetBaselineVerticalPosition(i))
+            Dim E3 As New Point(INNER_PADDING.Left, GetBaselineVerticalPosition(i - 1))
+            Dim E4 As New Point(_plotBox.Width - INNER_PADDING.Right, GetBaselineVerticalPosition(i - 1))
+
+            'initialise backward band limits
+            C = _theCorridor.gini(i - 1)
+            D = _theCorridor.gend(i - 1)
+            If C > D Then C -= _theCorridor.cycl
+
+            parallelograms = GetGreenBands(A, B, C, D, E1, E2, E3, E4, _theCorridor.trav(i - 1))
+
+            'if the band is interrupted, there's nothing else to do for this direction
+            If parallelograms Is Nothing Then Exit For
+
+            'plot
+            plotshape = New Region(parallelograms)
+            plotshape.Intersect(_plotAreaMask)
+            _g.FillRegion(GREEN_BAND_BRUSH, plotshape)
+
+            'update forward band limits to continue from previously limited band
+            A = C
+            B = D
+        Next
+
     End Sub
 
-    Private Function GetGreenBands(ByVal from_start As Double, ByVal from_end As Double, ByVal to_start As Double, ByVal to_end As Double,
-                                   ByVal A As Point, ByVal B As Point, ByVal C As Point, ByVal D As Point, ByVal travel_time As Double) As Region()
+    ''' <summary>
+    ''' 
+    ''' </summary>
+    ''' <param name="from_start">GINI at the first junction [s]</param>
+    ''' <param name="from_end">GEND at the first junction [s]</param>
+    ''' <param name="to_start">GINI at the second junction [s]</param>
+    ''' <param name="to_end">GEND at the second junction [s]</param>
+    ''' <param name="E1">Left endpoint of the base line [px]</param>
+    ''' <param name="E2">Right endpoint of the base line [px]</param>
+    ''' <param name="E3">Left endpoint of the next line [px]</param>
+    ''' <param name="E4">Right endpoint of the next line [px]</param>
+    ''' <param name="travel_time"></param>
+    ''' <returns></returns>
+    Private Function GetGreenBands(ByVal from_start As Double, ByVal from_end As Double, ByRef to_start As Double, ByRef to_end As Double,
+                                   ByVal E1 As Point, ByVal E2 As Point, ByVal E3 As Point, ByVal E4 As Point, ByVal travel_time As Double) As GraphicsPath
 
-        Dim fwd(1) As Region
-        Dim x1 As Integer = CInt(A.X + (B.X - A.X) * from_start / _theCorridor.cycl)
-        Dim x2 As Integer = CInt(A.X + (B.X - A.X) * from_end / _theCorridor.cycl)
-        Dim x3 As Integer = CInt(x1 + (B.X - A.X) * travel_time / _theCorridor.cycl)
-        Dim x4 As Integer = CInt(x2 + (B.X - A.X) * travel_time / _theCorridor.cycl)
-
-        'fwd(0) = New Region(New GraphicsPath({New Point(x1, A.Y), New Point(x2, A.Y), New Point(x4, A.Y), New Point(x3, A.Y)},
-        '                                     {0, 1, 1, 128}))
         Dim path As New GraphicsPath
-        path.AddPolygon({New Point(x1, A.Y), New Point(x2, A.Y), New Point(x4, C.Y), New Point(x3, C.Y)})
-        path.CloseFigure()
-        fwd(0) = New Region(path)
-        Return fwd
+        'the width of the plot
+        Dim L As Double = E2.X - E1.X
 
+        'check if going backwards
+        Dim direction As Integer = If(E1.Y < E3.Y, 1, -1)
+
+        'the forward parallelogram
+        Dim A As Integer = CInt(E1.X + L * from_start / _theCorridor.cycl)
+        Dim B As Integer = CInt(E1.X + L * from_end / _theCorridor.cycl)
+        Dim C As Integer = CInt(A + L * travel_time * direction / _theCorridor.cycl)
+        Dim D As Integer = CInt(B + L * travel_time * direction / _theCorridor.cycl)
+        Dim fp As Integer() = {A, B, C, D}
+
+        'the backwards parallelogram
+        Dim G As Integer = CInt(E3.X + L * to_start / _theCorridor.cycl)
+        Dim H As Integer = CInt(E3.X + L * to_end / _theCorridor.cycl)
+        Dim E As Integer = CInt(G - L * travel_time * direction / _theCorridor.cycl)
+        Dim F As Integer = CInt(H - L * travel_time * direction / _theCorridor.cycl)
+        Dim bp As Integer() = {E, F, G, H}
+
+        Dim p As Integer() = IntersectBands(fp, bp)
+
+        'simple case: the bands intersect within the same cycle
+        If p IsNot Nothing Then
+            path.AddPolygon({New Point(p(0), E1.Y), New Point(p(1), E1.Y), New Point(p(3), E3.Y), New Point(p(2), E3.Y)})
+            path.CloseFigure()
+            to_start = (p(2) - E3.X) * _theCorridor.cycl / L
+            to_end = (p(3) - E3.X) * _theCorridor.cycl / L
+
+        Else
+
+            'make a copy of the forward parallelogram and shift it back
+            Dim cycle_shift As Integer = 1 + Math.DivRem(CInt(Math.Round(travel_time)), _theCorridor.cycl, Nothing)
+            Dim fp1 As Integer() = MovePoints(fp, CInt(Math.Round(-cycle_shift * L)))
+
+            'make a copy of the backwards parallelogram and shift it forth
+            Dim bp1 As Integer() = MovePoints(bp, CInt(Math.Round(+cycle_shift * L)))
+            p = IntersectBands(fp, bp1)
+            'no intersection case
+            If p Is Nothing Then Return Nothing
+
+            path.AddPolygon({New Point(p(0), E1.Y), New Point(p(1), E1.Y), New Point(p(3), E3.Y), New Point(p(2), E3.Y)})
+            path.CloseFigure()
+            to_start = (p(2) - E3.X) * _theCorridor.cycl / L
+            to_end = (p(3) - E3.X) * _theCorridor.cycl / L
+
+            p = IntersectBands(fp1, bp)
+            path.AddPolygon({New Point(p(0), E1.Y), New Point(p(1), E1.Y), New Point(p(3), E3.Y), New Point(p(2), E3.Y)})
+            path.CloseFigure()
+
+            'if the front band ends completely outside the plot, select the rear one
+            If to_start > _theCorridor.cycl Then
+                to_start = (p(2) - E3.X) * _theCorridor.cycl / L
+                to_end = (p(3) - E3.X) * _theCorridor.cycl / L
+            End If
+
+        End If
+
+            Return path
+
+
+    End Function
+
+    Private Function MovePoints(ByVal points As Integer(), ByVal amount As Integer) As Integer()
+        Dim ret(points.Length - 1) As Integer
+        For i = 0 To ret.Length - 1
+            ret(i) = points(i) + amount
+        Next
+        Return ret
+    End Function
+
+    Private Function IntersectBands(ByVal p1 As Integer(), p2 As Integer()) As Integer()
+        'the intersection of the two parallelograms
+        Dim V1 As Integer = Math.Max(p1(0), p2(0))
+        Dim V2 As Integer = Math.Min(p1(1), p2(1))
+        Dim V3 As Integer = Math.Max(p1(2), p2(2))
+        Dim V4 As Integer = Math.Min(p1(3), p2(3))
+
+        'no intersection case
+        If V2 < V1 OrElse V4 < V3 Then Return Nothing
+
+        Return {V1, V2, V3, V4}
     End Function
 
     ''' <summary>
@@ -495,7 +627,11 @@ Public Class CorridorViewer
         rectangles = GetRectangles(t1, t2, thickness, _theCorridor.cycl, A, B, position)
         PlotBars(rectangles, brush)
     End Sub
-
+    ''' <summary>
+    ''' Get the vertical position in pixels of the specified row.
+    ''' </summary>
+    ''' <param name="row">Zero based row index</param>
+    ''' <returns></returns>
     Private Function GetBaselineVerticalPosition(ByVal row As Integer) As Integer
         Return CInt(Math.Round(INNER_PADDING.Top + row * ROW_HEIGHT + _theCorridor.distance(row) * PIXELS_PER_METRE + CInt(ROW_HEIGHT / 2)))
     End Function

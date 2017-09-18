@@ -18,7 +18,6 @@
 
         Dim opt As BandMaximiser
         Dim r As New Random
-        Dim offs As Double()
 
         For i As Integer = 1 To nIte
             For j As Integer = 0 To n - 1
@@ -49,12 +48,18 @@
                                     corridor(1).trav, corridor(1).gini, corridor(1).gend,
                                     gini2:=corridor(1).gini2, gend2:=corridor(1).gend2)
             corridor(1).offs = opt.OneWayOffsets.Select(Function(x) CInt(Math.Round(x))).ToArray
-            offs = opt.TwoWayOffsets(0)
 
             'dummy viewer creation
             Dim view As New CorridorViewForm(1)
             view.Show()
             view.Draw()
+
+            view.Close()
+            corridor(1).offs = opt.TwoWayOffsets(1).Select(Function(x) CInt(Math.Round(x))).ToArray
+            view = New CorridorViewForm(1)
+            view.Show()
+            view.Draw()
+            view.Close()
 
             Console.WriteLine("-----------------------------------------------------------------------------------------------------")
             Console.WriteLine("")
