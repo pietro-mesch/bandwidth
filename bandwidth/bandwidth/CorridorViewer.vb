@@ -376,7 +376,7 @@ Public Class CorridorViewer
         For i As Integer = 0 To _theCorridor.njunc - 1
             PlotGreenBands(i)
             PlotThroughPhases(i)
-            'PM REM
+            'PM REM PLOTTING AT EACH ITERATION FOR DEBUG PURPOSES ONLY
             _plotBox.Refresh()
         Next
 

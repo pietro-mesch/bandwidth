@@ -237,8 +237,9 @@ Public Class BandMaximiser
         Dim b, b2 As Integer
         solver.AddVariable("b", b)
         solver.AddVariable("b2", b2)
-        solver.SetBounds(b, 0, _g.Min)
-        solver.SetBounds(b2, 0, _g2.Min)
+        'PM bandwidth variable bounds
+        'solver.SetBounds(b, 0, _g.Min)
+        'solver.SetBounds(b2, 0, _g2.Min)
 
         'the relative offsets
         Dim w(n - 1) As Integer
@@ -257,7 +258,8 @@ Public Class BandMaximiser
                     solver.SetCoefficient(constraint(i)(j), b, 1)
                     solver.SetCoefficient(constraint(i)(j), w(i), -1)
                     solver.SetCoefficient(constraint(i)(j), w(j), 1)
-                    solver.SetBounds(constraint(i)(j), Rational.NegativeInfinity, _g(i) / 2 + _g(j) / 2)
+                    'solver.SetBounds(constraint(i)(j), Rational.NegativeInfinity, _g(i) / 2 + _g(j) / 2)
+                    solver.SetUpperBound(constraint(i)(j), _g(i) / 2 + _g(j) / 2)
                 End If
             Next
         Next
@@ -272,17 +274,28 @@ Public Class BandMaximiser
                     solver.SetCoefficient(constraint2(i)(j), b2, 1)
                     solver.SetCoefficient(constraint2(i)(j), w(i), -1)
                     solver.SetCoefficient(constraint2(i)(j), w(j), 1)
-                    solver.SetBounds(constraint2(i)(j), Rational.NegativeInfinity, _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j))
+                    'solver.SetBounds(constraint2(i)(j), Rational.NegativeInfinity, _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j))
+                    solver.SetUpperBound(constraint2(i)(j), _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j))
                 End If
             Next
         Next
+
+        'PM bandwidth constraints
+        Dim blim, b2lim As Integer
+        solver.AddRow("b constraint", blim)
+        solver.SetCoefficient(blim, b, 1)
+        solver.SetBounds(blim, 0, _g.Min)
+        solver.AddRow("b2 constraint", b2lim)
+        solver.SetCoefficient(b2lim, b2, 1)
+        solver.SetBounds(b2lim, 0, _g2.Min)
 
         'the bandwidth (objective function)
         Dim bandwidth As Integer
         solver.AddRow("two way bandwidth", bandwidth)
         solver.SetCoefficient(bandwidth, b, 1 - secondary_direction_weight)
-        'PM REACTIVATE
-        'solver.SetCoefficient(bandwidth, b2, secondary_direction_weight)
+        If secondary_direction_weight > 0 Then
+            solver.SetCoefficient(bandwidth, b2, secondary_direction_weight)
+        End If
         solver.AddGoal(bandwidth, 1, False)
 
         'solve the linear problem
@@ -290,8 +303,8 @@ Public Class BandMaximiser
 
         'extract values
         _B = solver.GetValue(b).ToDouble
-        'PM REACTIVATE
-        '_B2 = solver.GetValue(b2).ToDouble
+        _B2 = solver.GetValue(b2).ToDouble
+
         Dim w0 As Double = solver.GetValue(w(0)).ToDouble
         Dim to0 As Double = _t_o(0)
         For j As Integer = 0 To n - 1
@@ -299,15 +312,31 @@ Public Class BandMaximiser
             If offs(j) < 0 Then offs(j) += _C
         Next
 
+        'compute actual bandwidth
+        Dim B_real As Double = Double.PositiveInfinity
+        Dim B2_real As Double = Double.PositiveInfinity
+        For i As Integer = 0 To n - 1
+            For j As Integer = 0 To n - 1
+                If i <> j Then
+                    B_real = Math.Min(B_real, solver.GetValue(w(i)).ToDouble - solver.GetValue(w(j)).ToDouble + _g(i) / 2 + _g(j) / 2)
+                    B2_real = Math.Min(B2_real, solver.GetValue(w(i)).ToDouble - solver.GetValue(w(j)).ToDouble + _g(i) / 2 + _g(j) / 2 + _t_d0(i) - _t_d0(j))
+                End If
+
+            Next
+        Next
+
+
 #If DEBUG Then
         'time.Stop()
         Console.WriteLine("Green duration : min = {0} s , MAX = {1} s", _g.Min, _g.Max)
+        Console.WriteLine("     secondary : min = {0} s , MAX = {1} s", _g2.Min, _g2.Max)
+
         'Console.WriteLine("Solution time : {0} ms", time.ElapsedMilliseconds)
-        Console.WriteLine("Bandwidth 1 : {0} s [{1:0.0%}]", _B, _B / _g.Min)
-        Console.WriteLine("Bandwidth 2 : {0} s [{1:0.0%}]", _B2, _B2 / _g2.Min)
+        Console.WriteLine("Bandwidth 1 : {0:0} s [{1:0.0%}] --- {2:0} s [{3:0.0%}]", _B, _B / _g.Min, B_real, B_real / _g.Min)
+        Console.WriteLine("Bandwidth 2 : {0:0} s [{1:0.0%}] --- {2:0} s [{3:0.0%}]", _B2, _B2 / _g2.Min, B2_real, B2_real / _g2.Min)
         Console.WriteLine("OFFSET VALUES:")
         For j As Integer = 0 To n - 1
-            Console.Write("{0} ", offs(j))
+            Console.Write("{0:0} ", offs(j))
         Next
         Console.WriteLine("")
         Console.WriteLine("")

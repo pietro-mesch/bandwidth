@@ -5,45 +5,16 @@
         'test loop iterations
         Dim nIte As Integer = 10
         'test number of junctions
-        Dim n As Integer = 5
-        Dim cycl As Integer = 120
-        Dim leng(n - 2) As Double
-        Dim sped(n - 2) As Double
-        Dim trav(n - 2) As Double
-        Dim trav2(n - 2) As Double
-        Dim gini(n - 1) As Integer
-        Dim gini2(n - 1) As Integer
-        Dim gend(n - 1) As Integer
-        Dim gend2(n - 1) As Integer
+        Dim n As Integer = 2
 
         Dim opt As BandMaximiser
         Dim r As New Random
 
         For i As Integer = 1 To nIte
-            For j As Integer = 0 To n - 1
-                'travel times
-                If j < n - 1 Then
-                    trav(j) = r.Next(30, 130)
-                    trav2(j) = -trav(j) * 0.8
-                End If
-
-                gini(j) = r.Next(0, cycl + 1)
-                gend(j) = gini(j) + r.Next(30, 70)
-                If gend(j) > cycl Then gend(j) -= cycl
-
-                gini2(j) = gini(j) + r.Next(0, cycl + 1)
-                gend2(j) = gend(j) + gini2(j) - gini(j) - r.Next(0, 10)
-                If gini2(j) > cycl Then gini2(j) -= cycl
-                If gend2(j) > cycl Then gend2(j) -= cycl
-
-            Next
-
             ReDim corridor(1)
+            'random corridor
             corridor(1) = New t_CORRIDOR(n)
 
-            'opt = New BandMaximiser(cycl, trav, gini, gend, trav2:=trav2)
-            'offs = opt.OneWayOffsets()
-            'offs = opt.TwoWayOffsets()
             opt = New BandMaximiser(corridor(1).cycl,
                                     corridor(1).trav, corridor(1).gini, corridor(1).gend,
                                     gini2:=corridor(1).gini2, gend2:=corridor(1).gend2)
@@ -51,10 +22,23 @@
 
             'dummy viewer creation
             Dim view As New CorridorViewForm(1)
+            'view.Show()
+            'view.Draw()
+
+            'view.Close()
+
+            corridor(1).offs = opt.TwoWayOffsets(0).Select(Function(x) CInt(Math.Round(x))).ToArray
+            view = New CorridorViewForm(1)
             view.Show()
             view.Draw()
-
             view.Close()
+
+            corridor(1).offs = opt.TwoWayOffsets(0.5).Select(Function(x) CInt(Math.Round(x))).ToArray
+            view = New CorridorViewForm(1)
+            view.Show()
+            view.Draw()
+            view.Close()
+
             corridor(1).offs = opt.TwoWayOffsets(1).Select(Function(x) CInt(Math.Round(x))).ToArray
             view = New CorridorViewForm(1)
             view.Show()
@@ -212,7 +196,7 @@
     End Class
     Public corridor As t_CORRIDOR()
 
-    'PM REM
+    'PM REM THIS duplicates minput
     Enum VissigSignalState As Integer
         NotUsed = -1
         '----- commands -----
