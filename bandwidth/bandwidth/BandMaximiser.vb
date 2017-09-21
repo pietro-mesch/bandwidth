@@ -7,12 +7,12 @@ Public Class BandMaximiser
     ''' <summary>
     ''' Bandwidth
     ''' </summary>
-    Private _B As Double
+    Private _B As Double = 0
 
     ''' <summary>
     ''' Secondary Bandwidth
     ''' </summary>
-    Private _B2 As Double
+    Private _B2 As Double = 0
 
     ''' <summary>
     ''' Cycle time [s]
@@ -234,12 +234,8 @@ Public Class BandMaximiser
 
         Dim solver As New SimplexSolver()
         'add variables
-        Dim b, b2 As Integer
-        solver.AddVariable("b", b)
-        solver.AddVariable("b2", b2)
-        'PM bandwidth variable bounds
-        'solver.SetBounds(b, 0, _g.Min)
-        'solver.SetBounds(b2, 0, _g2.Min)
+        Dim b As Integer
+        Dim b2 As Integer
 
         'the relative offsets
         Dim w(n - 1) As Integer
@@ -249,61 +245,80 @@ Public Class BandMaximiser
         Next
 
         'the n x n-1 constraints for the main direction
-        Dim constraint(n - 1)() As Integer
-        For i As Integer = 0 To n - 1
-            ReDim constraint(i)(n - 1)
-            For j As Integer = 0 To n - 1
-                If i <> j Then
-                    solver.AddRow(String.Format("i{0}, j{1}", i, j), constraint(i)(j))
-                    solver.SetCoefficient(constraint(i)(j), b, 1)
-                    solver.SetCoefficient(constraint(i)(j), w(i), -1)
-                    solver.SetCoefficient(constraint(i)(j), w(j), 1)
-                    'solver.SetBounds(constraint(i)(j), Rational.NegativeInfinity, _g(i) / 2 + _g(j) / 2)
-                    solver.SetUpperBound(constraint(i)(j), _g(i) / 2 + _g(j) / 2)
-                End If
+        If secondary_direction_weight < 1 Then
+            solver.AddVariable("b", b)
+            Dim blim As Integer
+            solver.AddRow("b constraint", blim)
+            solver.SetCoefficient(blim, b, 1)
+            'PM BLIM
+            solver.SetBounds(blim, 0, _g.Min)
+            'solver.SetLowerBound(blim, 0)
+
+            Dim constraint(n - 1)() As Integer
+            For i As Integer = 0 To n - 1
+                ReDim constraint(i)(n - 1)
+                For j As Integer = 0 To n - 1
+                    If i <> j Then
+                        solver.AddRow(String.Format("i{0}, j{1}", i, j), constraint(i)(j))
+                        solver.SetCoefficient(constraint(i)(j), b, 1)
+                        solver.SetCoefficient(constraint(i)(j), w(i), -1)
+                        solver.SetCoefficient(constraint(i)(j), w(j), 1)
+                        'solver.SetBounds(constraint(i)(j), Rational.NegativeInfinity, _g(i) / 2 + _g(j) / 2)
+                        solver.SetUpperBound(constraint(i)(j), _g(i) / 2 + _g(j) / 2)
+                    End If
+                Next
             Next
-        Next
+        End If
 
         'the n x n-1 constraints for the secondary direction
-        Dim constraint2(n - 1)() As Integer
-        For i As Integer = 0 To n - 1
-            ReDim constraint2(i)(n - 1)
-            For j As Integer = 0 To n - 1
-                If i <> j Then
-                    solver.AddRow(String.Format("i{0}, j{1} secondary", i, j), constraint2(i)(j))
-                    solver.SetCoefficient(constraint2(i)(j), b2, 1)
-                    solver.SetCoefficient(constraint2(i)(j), w(i), -1)
-                    solver.SetCoefficient(constraint2(i)(j), w(j), 1)
-                    'solver.SetBounds(constraint2(i)(j), Rational.NegativeInfinity, _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j))
-                    solver.SetUpperBound(constraint2(i)(j), _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j))
-                End If
-            Next
-        Next
+        If secondary_direction_weight > 0 Then
+            solver.AddVariable("b2", b2)
 
-        'PM bandwidth constraints
-        Dim blim, b2lim As Integer
-        solver.AddRow("b constraint", blim)
-        solver.SetCoefficient(blim, b, 1)
-        solver.SetBounds(blim, 0, _g.Min)
-        solver.AddRow("b2 constraint", b2lim)
-        solver.SetCoefficient(b2lim, b2, 1)
-        solver.SetBounds(b2lim, 0, _g2.Min)
+            Dim b2lim As Integer
+            solver.AddRow("b2 constraint", b2lim)
+            solver.SetCoefficient(b2lim, b2, 1)
+            'PM B2LIM
+            solver.SetBounds(b2lim, 0, _g2.Min)
+            'solver.SetLowerBound(b2lim, 0)
+
+            Dim constraint2(n - 1)() As Integer
+            For i As Integer = 0 To n - 1
+                ReDim constraint2(i)(n - 1)
+                For j As Integer = 0 To n - 1
+                    If i <> j Then
+                        solver.AddRow(String.Format("i{0}, j{1} secondary", i, j), constraint2(i)(j))
+                        solver.SetCoefficient(constraint2(i)(j), b2, 1)
+                        solver.SetCoefficient(constraint2(i)(j), w(i), -1)
+                        solver.SetCoefficient(constraint2(i)(j), w(j), 1)
+                        'solver.SetBounds(constraint2(i)(j), Rational.NegativeInfinity, _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j))
+                        solver.SetUpperBound(constraint2(i)(j), _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j))
+                    End If
+                Next
+            Next
+        End If
 
         'the bandwidth (objective function)
         Dim bandwidth As Integer
         solver.AddRow("two way bandwidth", bandwidth)
-        solver.SetCoefficient(bandwidth, b, 1 - secondary_direction_weight)
+        If secondary_direction_weight < 1 Then
+            solver.SetCoefficient(bandwidth, b, 1 - secondary_direction_weight)
+        End If
         If secondary_direction_weight > 0 Then
             solver.SetCoefficient(bandwidth, b2, secondary_direction_weight)
         End If
         solver.AddGoal(bandwidth, 1, False)
 
+        Me.ResetBandwidth()
         'solve the linear problem
         solver.Solve(New SimplexSolverParams())
 
         'extract values
-        _B = solver.GetValue(b).ToDouble
-        _B2 = solver.GetValue(b2).ToDouble
+        If secondary_direction_weight < 1 Then
+            _B = solver.GetValue(b).ToDouble
+        End If
+        If secondary_direction_weight > 0 Then
+            _B2 = solver.GetValue(b2).ToDouble
+        End If
 
         Dim w0 As Double = solver.GetValue(w(0)).ToDouble
         Dim to0 As Double = _t_o(0)
@@ -319,11 +334,12 @@ Public Class BandMaximiser
             For j As Integer = 0 To n - 1
                 If i <> j Then
                     B_real = Math.Min(B_real, solver.GetValue(w(i)).ToDouble - solver.GetValue(w(j)).ToDouble + _g(i) / 2 + _g(j) / 2)
-                    B2_real = Math.Min(B2_real, solver.GetValue(w(i)).ToDouble - solver.GetValue(w(j)).ToDouble + _g(i) / 2 + _g(j) / 2 + _t_d0(i) - _t_d0(j))
+                    B2_real = Math.Min(B2_real, solver.GetValue(w(i)).ToDouble - solver.GetValue(w(j)).ToDouble + _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j))
                 End If
-
-            Next
-        Next
+            Next j
+        Next i
+        B_real = Math.Max(0, B_real)
+        B2_real = Math.Max(0, B2_real)
 
 
 #If DEBUG Then
@@ -346,6 +362,11 @@ Public Class BandMaximiser
 
         Return offs
     End Function
+
+    Private Sub ResetBandwidth()
+        Me._B = 0
+        Me._B2 = 0
+    End Sub
 
 #Region "PRIVATE METHODS"
 
@@ -410,9 +431,9 @@ Public Class BandMaximiser
                 midpoint = (gini(j) + gend(j)) / 2
             Else
                 midpoint = (gini(j) + gend(j) + _C) / 2
-                If midpoint >= _C Then
-                    midpoint -= _C
-                End If
+                'If midpoint >= _C Then
+                '    midpoint -= _C
+                'End If
             End If
 
             'find its distance to the nearest cycle

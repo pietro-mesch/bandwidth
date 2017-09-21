@@ -1,11 +1,11 @@
 ﻿Module m_main
 
     Sub Main()
-
+        Console.SetWindowSize(125, 40)
         'test loop iterations
         Dim nIte As Integer = 10
         'test number of junctions
-        Dim n As Integer = 2
+        Dim n As Integer = 5
 
         Dim opt As BandMaximiser
         Dim r As New Random
@@ -129,15 +129,15 @@
                 'LINK PROPERTIES
                 If i > 0 Then distance(i) = distance(i - 1) + r.Next(150, 400)
                 If i < njunc - 1 Then
-                    sped(i) = (60 - r.Next(0, 31)) / 3.6
+                    sped(i) = (60 - r.Next(0, 21)) / 3.6
                     sped2(i) = sped(i)
                 End If
 
-                _gini(i) = r.Next(0, cycl + 1)
+                _gini(i) = 0
                 _gend(i) = _gini(i) + r.Next(30, 70)
                 If _gend(i) > cycl Then _gend(i) -= cycl
 
-                _gini2(i) = _gini(i) + r.Next(0, cycl + 1)
+                _gini2(i) = r.Next(0, cycl + 1)
                 _gend2(i) = _gend(i) + _gini2(i) - _gini(i) - r.Next(0, 10)
                 If _gini2(i) > cycl Then _gini2(i) -= cycl
                 If _gend2(i) > cycl Then _gend2(i) -= cycl
