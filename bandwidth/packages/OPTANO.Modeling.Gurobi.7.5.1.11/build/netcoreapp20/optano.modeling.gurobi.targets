@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <Target Name = "CopyFiles" AfterTargets="build">
+    <Copy DestinationFolder="$(OutputPath)" SourceFiles="$(NuGetPackageRoot)optano.modeling.gurobi\7.5.1.11\content\gurobi75.dll" SkipUnchangedFiles = "false" />
+    <Copy DestinationFolder="$(OutputPath)" SourceFiles="$(NuGetPackageRoot)optano.modeling.gurobi\7.5.1.11\content\Gurobi75.NET.XML" SkipUnchangedFiles = "false" />
+    <Copy DestinationFolder="$(OutputPath)" SourceFiles="$(NuGetPackageRoot)optano.modeling.gurobi\7.5.1.11\content\gurobi.lic" SkipUnchangedFiles = "false" />
+	<Copy DestinationFolder="$(OutputPath)" SourceFiles="$(NuGetPackageRoot)optano.modeling.gurobi\7.5.1.11\lib\net40\Gurobi75.NET.dll" SkipUnchangedFiles = "false" />
+	
+    <Copy DestinationFolder="$(OutputPath)\publish" SourceFiles="$(NuGetPackageRoot)optano.modeling.gurobi\7.5.1.11\content\gurobi75.dll" SkipUnchangedFiles = "false" />
+    <Copy DestinationFolder="$(OutputPath)\publish" SourceFiles="$(NuGetPackageRoot)optano.modeling.gurobi\7.5.1.11\content\Gurobi75.NET.XML" SkipUnchangedFiles = "false" />
+    <Copy DestinationFolder="$(OutputPath)\publish" SourceFiles="$(NuGetPackageRoot)optano.modeling.gurobi\7.5.1.11\content\gurobi.lic" SkipUnchangedFiles = "false" />
+	<Copy DestinationFolder="$(OutputPath)\publish" SourceFiles="$(NuGetPackageRoot)optano.modeling.gurobi\7.5.1.11\lib\net40\Gurobi75.NET.dll" SkipUnchangedFiles = "false" />
+  </Target>
+</Project>

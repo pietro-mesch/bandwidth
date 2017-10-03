@@ -1,9 +1,12 @@
 ﻿Option Strict On
-
+Imports Gurobi
 Imports Microsoft.SolverFoundation.Common
 Imports Microsoft.SolverFoundation.Solvers
 
 Public Class BandMaximiser
+
+    Private _theCorridor As t_CORRIDOR
+
     ''' <summary>
     ''' Bandwidth
     ''' </summary>
@@ -54,61 +57,88 @@ Public Class BandMaximiser
     ''' </summary>
     Private n As Integer
 
+    'PM REM
+    'Public Sub New(ByVal cycl As Double, ByVal trav As Double(),
+    '               ByVal gini As Integer(), ByVal gend As Integer(),
+    '               Optional ByVal trav2 As Double() = Nothing,
+    '               Optional ByVal gini2 As Integer() = Nothing,
+    '               Optional ByVal gend2 As Integer() = Nothing)
+    '    'PM CHECK INPUT
+    '    If cycl <= 0 Then
+    '        Throw New ArgumentOutOfRangeException
+    '    End If
 
-    Public Sub New(ByVal cycl As Double, ByVal trav As Double(),
-                                  ByVal gini As Integer(), ByVal gend As Integer(),
-                   Optional ByVal trav2 As Double() = Nothing,
-                   Optional ByVal gini2 As Integer() = Nothing,
-                   Optional ByVal gend2 As Integer() = Nothing)
-        'PM CHECK INPUT
-        If cycl <= 0 Then
-            Throw New ArgumentOutOfRangeException
-        End If
+    '    If gini.Length <> gend.Length Then
+    '        Throw New ArgumentException
+    '    End If
+    '    If gini2 IsNot Nothing OrElse gend2 IsNot Nothing Then
+    '        If gini2.Length <> gend.Length OrElse gend2.Length <> gend.Length Then
+    '            Throw New ArgumentException
+    '        End If
+    '    End If
 
-        If gini.Length <> gend.Length Then
-            Throw New ArgumentException
-        End If
-        If gini2 IsNot Nothing OrElse gend2 IsNot Nothing Then
-            If gini2.Length <> gend.Length OrElse gend2.Length <> gend.Length Then
-                Throw New ArgumentException
-            End If
-        End If
+    '    If trav.Length <> gini.Length - 1 Then
+    '        Throw New ArgumentException
+    '    End If
+    '    If trav2 IsNot Nothing AndAlso trav2.Length <> gini.Length - 1 Then
+    '        Throw New ArgumentException
+    '    End If
 
-        If trav.Length <> gini.Length - 1 Then
-            Throw New ArgumentException
-        End If
-        If trav2 IsNot Nothing AndAlso trav2.Length <> gini.Length - 1 Then
-            Throw New ArgumentException
-        End If
+    '    n = gini.Length 'number of junctions
 
-        n = gini.Length 'number of junctions
+    '    'PREPROCESSING
+    '    _C = cycl
+
+    '    'TRAVEL TIMES
+    '    _t = trav
+    '    If trav2 Is Nothing Then trav2 = trav.Select(Function(x) -x).ToArray
+    '    _t2 = trav2
+
+    '    'IF ONLY ONE SET OF GINIGEND WAS PROVIDED, ASSUME THAT THE THROUGH PHASE SERVES BOTH DIRECTIONS
+    '    'GREEN DURATION
+    '    _g = ComputeGreenDuration(gini, gend)
+    '    If gini2 Is Nothing AndAlso gend2 Is Nothing Then
+    '        gini2 = gini
+    '        gend2 = gend
+    '    End If
+    '    _g2 = ComputeGreenDuration(gini2, gend2)
+
+    '    'ABSOLUTE OFFSET
+    '    _t_o = ComputeAbsoluteOffsets(gini, gend)
+
+    '    'INTERNAL OFFSET
+    '    _t_d0 = ComputeInternalOffsets(gini, gend, gini2, gend2)
+
+    'End Sub
+    Public Sub New(c As t_CORRIDOR)
+
+        _theCorridor = c
+
+        n = c.gini.Length 'number of junctions
 
         'PREPROCESSING
-        _C = cycl
+        _C = c.cycl
 
         'TRAVEL TIMES
-        _t = trav
-        If trav2 Is Nothing Then trav2 = trav.Select(Function(x) -x).ToArray
-        _t2 = trav2
+        _t = c.trav
+        If c.trav2 Is Nothing Then
+            _t2 = c.trav.Select(Function(x) -x).ToArray
+        Else
+            _t2 = c.trav2
+        End If
 
         'IF ONLY ONE SET OF GINIGEND WAS PROVIDED, ASSUME THAT THE THROUGH PHASE SERVES BOTH DIRECTIONS
         'GREEN DURATION
-        _g = ComputeGreenDuration(gini, gend)
-        If gini2 Is Nothing AndAlso gend2 Is Nothing Then
-            gini2 = gini
-            gend2 = gend
-        End If
-        _g2 = ComputeGreenDuration(gini2, gend2)
+        _g = c.ComputeGreenDuration(False)
+        _g2 = c.ComputeGreenDuration(True)
 
         'ABSOLUTE OFFSET
-        _t_o = ComputeAbsoluteOffsets(gini, gend)
+        _t_o = c.AbsoluteOffset(False)
 
         'INTERNAL OFFSET
-        _t_d0 = ComputeInternalOffsets(gini, gend, gini2, gend2)
-
+        _t_d0 = c.InternalOffsetZero()
 
     End Sub
-
 
     ''' <summary>
     ''' Calculate the offsets along the path that maximise the green bandwidth in the main direction only
@@ -201,12 +231,231 @@ Public Class BandMaximiser
         Return offs
     End Function
 
+    Public Function GurobiOneWayOffsets() As Double()
+        Dim offs(n - 1) As Double
+
+#If DEBUG Then
+        Console.WriteLine("One Way Bandwidth Optimisation, fixed travel times, {0} junctions.", n)
+        'Dim time As New Stopwatch
+        'time.Start()
+#End If
+
+        Dim env As New GRBEnv("LP.log")
+        Dim model As New GRBModel(env)
+
+        'add variables
+        Dim b As GRBVar = model.AddVar(0, _g.Min, 0, GRB.CONTINUOUS, "main band")
+
+        'the relative offsets
+        Dim w(n - 1) As GRBVar
+        For j As Integer = 0 To n - 1
+            w(j) = model.AddVar(-_C / 2, _C / 2, 0, GRB.CONTINUOUS, "w" & j)
+        Next
+
+        'add objective
+        model.SetObjective(1 * b, GRB.MAXIMIZE)
+
+        'the n x n-1 constraints for the main direction
+        For i As Integer = 0 To n - 1
+            For j As Integer = 0 To n - 1
+                If i <> j Then
+                    model.AddConstr(b - w(i) + w(j) <= _g(i) / 2 + _g(j) / 2, String.Format("i{0}, j{1}", i, j))
+                End If
+            Next
+        Next
+
+        Me.ResetBandwidth()
+        'solve the linear problem
+        model.Optimize()
+
+#If DEBUG Then
+        If model.Status <> 2 Then
+            _theCorridor.Dump("infeasible.txt")
+            Stop
+        End If
+#End If
+
+        'extract values
+        _B = b.X
+
+        Dim w0 As Double = w(0).X
+        Dim to0 As Double = _t_o(0)
+        For j As Integer = 0 To n - 1
+            offs(j) = modC((to0 - w0 + w(j).X + If(j > 0, Sum(_t, 0, j - 1), 0))) - _t_o(j)
+            If offs(j) < 0 Then offs(j) += _C
+        Next
+
+        'compute actual bandwidth
+        Dim B_real As Double = Double.PositiveInfinity
+        For i As Integer = 0 To n - 1
+            For j As Integer = 0 To n - 1
+                If i <> j Then
+                    B_real = Math.Min(B_real, w(i).X - w(j).X + _g(i) / 2 + _g(j) / 2)
+                End If
+            Next j
+        Next i
+        B_real = Math.Max(0, B_real)
+
+
+
+#If DEBUG Then
+        'time.Stop()
+        Console.WriteLine("Green duration : min = {0} s , MAX = {1} s", _g.Min, _g.Max)
+        Console.WriteLine("     secondary : min = {0} s , MAX = {1} s", _g2.Min, _g2.Max)
+
+        'Console.WriteLine("Solution time : {0} ms", time.ElapsedMilliseconds)
+        Console.WriteLine("Bandwidth 1 : {0:0} s [{1:0.0%}] --- {2:0} s [{3:0.0%}]", _B, _B / _g.Min, B_real, B_real / _g.Min)
+        Console.WriteLine("OFFSET VALUES:")
+        For j As Integer = 0 To n - 1
+            Console.Write("{0:0} ", offs(j))
+        Next
+        Console.WriteLine("")
+        Console.WriteLine("")
+#End If
+
+        'time = Nothing
+
+        Return offs
+    End Function
 
     ''' <summary>
     ''' Calculate the offsets along the path that maximise the green bandwidth in the main direction only
     ''' </summary>
     ''' <param name="secondary_direction_weight"> the weight of the secondary bandwidth in the optimisation (0,1) </param>
     ''' <returns></returns>
+    Public Function GurobiTwoWayOffsets(Optional ByVal secondary_direction_weight As Double = 0.1) As Double()
+        Dim offs(n - 1) As Double
+
+        If secondary_direction_weight > 1 Then Throw New ArgumentOutOfRangeException("The secondary bandwidth weight cannot be more than 1")
+        If secondary_direction_weight < 0 Then Throw New ArgumentOutOfRangeException("The secondary bandwidth weight cannot be negative")
+
+        '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+        '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+        '' INPUTS TO TWO WAY OPTIMISATION                                                                      ''
+        '' the variables vector has dimensions n+2, for n relative offsets and the bandwidth in each direction ''
+        '' the linear program goes as follows:                                                                 ''
+        ''                                                                                                     ''
+        '' MAX b + b2                                                                                          ''
+        '' SUBJECT TO b <= t_d(i) - t_d(j) + (g(i) + g(j))/2 for each i <> j € [0, n-1]                        ''
+        ''            b >= 0                                                                                   ''
+        ''            b <= g.min                                                                               ''
+        '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+        '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+#If DEBUG Then
+        Console.WriteLine("Two Way Bandwidth Optimisation, fixed travel times, {0} junctions.", n)
+        'Dim time As New Stopwatch
+        'time.Start()
+#End If
+
+        Dim env As New GRBEnv("LP.log")
+        Dim model As New GRBModel(env)
+
+        'add variables
+        Dim b As GRBVar = model.AddVar(0, _g.Min, 0, GRB.CONTINUOUS, "main band")
+        Dim b2 As GRBVar = model.AddVar(0, _g2.Min, 0, GRB.CONTINUOUS, "return band")
+
+        'the relative offsets
+        Dim w(n - 1) As GRBVar
+        For j As Integer = 0 To n - 1
+            w(j) = model.AddVar(-_C / 2, _C / 2, 0, GRB.CONTINUOUS, "w" & j)
+        Next
+
+        'add objective
+        model.SetObjective((1 - secondary_direction_weight) * b + secondary_direction_weight * b2, GRB.MAXIMIZE)
+
+        'the n x n-1 constraints for the main direction
+        For i As Integer = 0 To n - 1
+            For j As Integer = 0 To n - 1
+                If i <> j Then
+                    model.AddConstr(b - w(i) + w(j) <= _g(i) / 2 + _g(j) / 2, String.Format("i{0}, j{1}", i, j))
+                End If
+            Next
+        Next
+
+        'the n x n-1 constraints for the return direction
+        For i As Integer = 0 To n - 1
+            For j As Integer = 0 To n - 1
+                If i <> j Then
+                    model.AddConstr(b2 - w(i) + w(j) <= _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j), String.Format("ret i{0}, j{1}", i, j))
+                    'model.AddConstr(b2 - w(i) + w(j) <= _g2(i) / 2 + _g2(j) / 2 + modC(_t_d0(i) - _t_d0(j)), String.Format("ret i{0}, j{1}", i, j))
+
+                End If
+            Next
+        Next
+
+        Me.ResetBandwidth()
+        'solve the linear problem
+        model.Optimize()
+
+#If DEBUG Then
+        Select Case model.Status
+            Case 2
+                'ALL GOOD
+
+            Case 3
+                Stop
+                _theCorridor.Dump("infeasible.txt")
+                Return {-1}
+
+            Case 5
+                Stop
+                _theCorridor.Dump("unbounded.txt")
+
+            Case Else
+                Stop
+
+        End Select
+#End If
+
+        'extract values
+        _B = b.X
+        _B2 = b2.X
+
+
+        Dim w0 As Double = w(0).X
+        Dim to0 As Double = _t_o(0)
+        For j As Integer = 0 To n - 1
+            offs(j) = modC((to0 - w0 + w(j).X + If(j > 0, Sum(_t, 0, j - 1), 0))) - _t_o(j)
+            If offs(j) < 0 Then offs(j) += _C
+        Next
+
+        'compute actual bandwidth
+        Dim B_real As Double = Double.PositiveInfinity
+        Dim B2_real As Double = Double.PositiveInfinity
+        For i As Integer = 0 To n - 1
+            For j As Integer = 0 To n - 1
+                If i <> j Then
+                    B_real = Math.Min(B_real, w(i).X - w(j).X + _g(i) / 2 + _g(j) / 2)
+                    B2_real = Math.Min(B2_real, w(i).X - w(j).X + _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j))
+                End If
+            Next j
+        Next i
+        B_real = Math.Max(0, B_real)
+        B2_real = Math.Max(0, B2_real)
+
+
+#If DEBUG Then
+        'time.Stop()
+        Console.WriteLine("Green duration : min = {0} s , MAX = {1} s", _g.Min, _g.Max)
+        Console.WriteLine("     secondary : min = {0} s , MAX = {1} s", _g2.Min, _g2.Max)
+
+        'Console.WriteLine("Solution time : {0} ms", time.ElapsedMilliseconds)
+        Console.WriteLine("Bandwidth 1 : {0:0} s [{1:0.0%}] --- {2:0} s [{3:0.0%}]", _B, _B / _g.Min, B_real, B_real / _g.Min)
+        Console.WriteLine("Bandwidth 2 : {0:0} s [{1:0.0%}] --- {2:0} s [{3:0.0%}]", _B2, _B2 / _g2.Min, B2_real, B2_real / _g2.Min)
+        Console.WriteLine("OFFSET VALUES:")
+        For j As Integer = 0 To n - 1
+            Console.Write("{0:0} ", offs(j))
+        Next
+        Console.WriteLine("")
+        Console.WriteLine("")
+#End If
+
+        'time = Nothing
+
+        Return offs
+    End Function
+
     Public Function TwoWayOffsets(Optional ByVal secondary_direction_weight As Double = 0.1) As Double()
         Dim offs(n - 1) As Double
 
@@ -245,57 +494,54 @@ Public Class BandMaximiser
         Next
 
         'the n x n-1 constraints for the main direction
-        If secondary_direction_weight < 1 Then
-            solver.AddVariable("b", b)
-            Dim blim As Integer
-            solver.AddRow("b constraint", blim)
-            solver.SetCoefficient(blim, b, 1)
-            'PM BLIM
-            solver.SetBounds(blim, 0, _g.Min)
-            'solver.SetLowerBound(blim, 0)
+        'If secondary_direction_weight < 1 Then
+        solver.AddVariable("b", b)
+        Dim blim As Integer
+        solver.AddRow("b constraint", blim)
+        solver.SetCoefficient(blim, b, 1)
+        'PM BLIM
+        solver.SetBounds(blim, 0, _g.Min)
+        'solver.SetLowerBound(blim, 0)
 
-            Dim constraint(n - 1)() As Integer
-            For i As Integer = 0 To n - 1
-                ReDim constraint(i)(n - 1)
-                For j As Integer = 0 To n - 1
-                    If i <> j Then
-                        solver.AddRow(String.Format("i{0}, j{1}", i, j), constraint(i)(j))
-                        solver.SetCoefficient(constraint(i)(j), b, 1)
-                        solver.SetCoefficient(constraint(i)(j), w(i), -1)
-                        solver.SetCoefficient(constraint(i)(j), w(j), 1)
-                        'solver.SetBounds(constraint(i)(j), Rational.NegativeInfinity, _g(i) / 2 + _g(j) / 2)
-                        solver.SetUpperBound(constraint(i)(j), _g(i) / 2 + _g(j) / 2)
-                    End If
-                Next
+        Dim constraint(n - 1)() As Integer
+        For i As Integer = 0 To n - 1
+            ReDim constraint(i)(n - 1)
+            For j As Integer = 0 To n - 1
+                If i <> j Then
+                    solver.AddRow(String.Format("i{0}, j{1}", i, j), constraint(i)(j))
+                    solver.SetCoefficient(constraint(i)(j), b, 1)
+                    solver.SetCoefficient(constraint(i)(j), w(i), -1)
+                    solver.SetCoefficient(constraint(i)(j), w(j), 1)
+                    solver.SetUpperBound(constraint(i)(j), _g(i) / 2 + _g(j) / 2)
+                End If
             Next
-        End If
+        Next
+        'End If
 
         'the n x n-1 constraints for the secondary direction
-        If secondary_direction_weight > 0 Then
-            solver.AddVariable("b2", b2)
+        'If secondary_direction_weight > 0 Then
+        solver.AddVariable("b2", b2)
+        Dim b2lim As Integer
+        solver.AddRow("b2 constraint", b2lim)
+        solver.SetCoefficient(b2lim, b2, 1)
+        'PM B2LIM
+        solver.SetBounds(b2lim, 0, _g2.Min)
+        'solver.SetLowerBound(b2lim, 0)
 
-            Dim b2lim As Integer
-            solver.AddRow("b2 constraint", b2lim)
-            solver.SetCoefficient(b2lim, b2, 1)
-            'PM B2LIM
-            solver.SetBounds(b2lim, 0, _g2.Min)
-            'solver.SetLowerBound(b2lim, 0)
-
-            Dim constraint2(n - 1)() As Integer
-            For i As Integer = 0 To n - 1
-                ReDim constraint2(i)(n - 1)
-                For j As Integer = 0 To n - 1
-                    If i <> j Then
-                        solver.AddRow(String.Format("i{0}, j{1} secondary", i, j), constraint2(i)(j))
-                        solver.SetCoefficient(constraint2(i)(j), b2, 1)
-                        solver.SetCoefficient(constraint2(i)(j), w(i), -1)
-                        solver.SetCoefficient(constraint2(i)(j), w(j), 1)
-                        'solver.SetBounds(constraint2(i)(j), Rational.NegativeInfinity, _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j))
-                        solver.SetUpperBound(constraint2(i)(j), _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j))
-                    End If
-                Next
+        Dim constraint2(n - 1)() As Integer
+        For i As Integer = 0 To n - 1
+            ReDim constraint2(i)(n - 1)
+            For j As Integer = 0 To n - 1
+                If i <> j Then
+                    solver.AddRow(String.Format("i{0}, j{1} secondary", i, j), constraint2(i)(j))
+                    solver.SetCoefficient(constraint2(i)(j), b2, 1)
+                    solver.SetCoefficient(constraint2(i)(j), w(i), -1)
+                    solver.SetCoefficient(constraint2(i)(j), w(j), 1)
+                    solver.SetUpperBound(constraint2(i)(j), _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j))
+                End If
             Next
-        End If
+        Next
+        'End If
 
         'the bandwidth (objective function)
         Dim bandwidth As Integer
@@ -303,9 +549,9 @@ Public Class BandMaximiser
         If secondary_direction_weight < 1 Then
             solver.SetCoefficient(bandwidth, b, 1 - secondary_direction_weight)
         End If
-        If secondary_direction_weight > 0 Then
-            solver.SetCoefficient(bandwidth, b2, secondary_direction_weight)
-        End If
+        'If secondary_direction_weight > 0 Then
+        solver.SetCoefficient(bandwidth, b2, secondary_direction_weight)
+        'End If
         solver.AddGoal(bandwidth, 1, False)
 
         Me.ResetBandwidth()
@@ -316,9 +562,9 @@ Public Class BandMaximiser
         If secondary_direction_weight < 1 Then
             _B = solver.GetValue(b).ToDouble
         End If
-        If secondary_direction_weight > 0 Then
-            _B2 = solver.GetValue(b2).ToDouble
-        End If
+        'If secondary_direction_weight > 0 Then
+        _B2 = solver.GetValue(b2).ToDouble
+        'End If
 
         Dim w0 As Double = solver.GetValue(w(0)).ToDouble
         Dim to0 As Double = _t_o(0)
@@ -381,11 +627,13 @@ Public Class BandMaximiser
         End If
 
         Dim n As Integer
-        While t > (n + 0.5) * _C
+        Dim sign As Integer = If(t >= 0, 1, -1)
+
+        While t * sign > (n + 0.5) * _C
             n += 1
         End While
 
-        Return t - (_C * n)
+        Return t - (_C * n) * sign
 
     End Function
 
@@ -408,64 +656,7 @@ Public Class BandMaximiser
 
     End Function
 
-    Private Function ComputeGreenDuration(ByVal gini As Integer(), ByVal gend As Integer()) As Double()
-        Dim duration(n - 1) As Double
-        For j As Integer = 0 To n - 1
-            duration(j) = gend(j) - gini(j)
-            If duration(j) < 0 Then duration(j) += _C
-            If duration(j) <= 0 Then
-                Throw New ArgumentException
-            End If
-        Next
 
-        Return duration
-    End Function
-
-    Private Function ComputeAbsoluteOffsets(ByVal gini As Integer(), ByVal gend As Integer()) As Double()
-        Dim midpoint As Double
-        Dim offset(n - 1) As Double
-        For j As Integer = 0 To n - 1
-
-            'first find green midpoint
-            If gini(j) < gend(j) Then
-                midpoint = (gini(j) + gend(j)) / 2
-            Else
-                midpoint = (gini(j) + gend(j) + _C) / 2
-                'If midpoint >= _C Then
-                '    midpoint -= _C
-                'End If
-            End If
-
-            'find its distance to the nearest cycle
-            offset(j) = modC(midpoint)
-        Next
-
-        Return offset
-
-    End Function
-
-    ''' <summary>
-    ''' Computes the internal offsets mapped to the FoR of the first junction
-    ''' </summary>
-    ''' <param name="gini"></param>
-    ''' <param name="gend"></param>
-    ''' <param name="gini2"></param>
-    ''' <param name="gend2"></param>
-    ''' <returns></returns>
-    Private Function ComputeInternalOffsets(ByVal gini As Integer(), ByVal gend As Integer(), ByVal gini2 As Integer(), ByVal gend2 As Integer()) As Double()
-
-        Dim offset As Double() = ComputeAbsoluteOffsets(gini, gend)
-        Dim offset2 As Double() = ComputeAbsoluteOffsets(gini2, gend2)
-
-        Dim internal(n - 1) As Double
-
-        For i As Integer = 0 To n - 1
-            internal(i) = modC(modC(offset2(i) - offset(i)) + If(i > 0, Sum(_t, 0, i - 1) - Sum(_t2, 0, i - 1), 0))
-        Next
-
-        Return internal
-
-    End Function
 #End Region
 
 End Class
