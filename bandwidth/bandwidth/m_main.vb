@@ -6,6 +6,23 @@
         Dim nIte As Integer = 100
         'test number of junctions
         Dim n As Integer = 5
+        ReDim corridor(1)
+
+        Dim view As CorridorViewForm
+
+        'TESTING GENETIC
+        Dim ga As GeneticSynchroniser
+        'random corridor
+        corridor(1) = New t_CORRIDOR(n)
+        For i As Integer = 1 To nIte
+            ga = New GeneticSynchroniser(corridor(1))
+            ga.Optimize()
+            view = New CorridorViewForm(1)
+            view.Show()
+            view.Draw()
+            view.Close()
+        Next
+
 
         Dim opt As BandMaximiser
         Dim r As New Random
@@ -15,36 +32,25 @@
             'random corridor
             corridor(1) = New t_CORRIDOR(n)
 
-            'opt = New BandMaximiser(corridor(1).cycl,
-            '                        corridor(1).trav, corridor(1).gini, corridor(1).gend,
-            '                        gini2:=corridor(1).gini2, gend2:=corridor(1).gend2)
             opt = New BandMaximiser(corridor(1))
-            'corridor(1).offs = opt.GurobiOneWayOffsets.Select(Function(x) CInt(Math.Round(x))).ToArray
 
-            'dummy viewer creation
-            Dim view As New CorridorViewForm(1)
-            'view.Show()
-            'view.Draw()
-
-            'view.Close()
-
-            corridor(1).offs = opt.GurobiTwoWayOffsets(0).Select(Function(x) CInt(Math.Round(x))).ToArray
+            corridor(1).offs = opt.GetOffsetsTwoWayBand(0).Select(Function(x) CInt(Math.Round(x))).ToArray
             view = New CorridorViewForm(1)
             view.Show()
             view.Draw()
             view.Close()
 
-            'corridor(1).offs = opt.GurobiTwoWayOffsets(0.5).Select(Function(x) CInt(Math.Round(x))).ToArray
-            'view = New CorridorViewForm(1)
-            'view.Show()
-            'view.Draw()
-            'view.Close()
+            corridor(1).offs = opt.GetOffsetsTwoWayBand(0.5).Select(Function(x) CInt(Math.Round(x))).ToArray
+            view = New CorridorViewForm(1)
+            view.Show()
+            view.Draw()
+            view.Close()
 
-            'corridor(1).offs = opt.GurobiTwoWayOffsets(1).Select(Function(x) CInt(Math.Round(x))).ToArray
-            'view = New CorridorViewForm(1)
-            'view.Show()
-            'view.Draw()
-            'view.Close()
+            corridor(1).offs = opt.GetOffsetsTwoWayBand(1).Select(Function(x) CInt(Math.Round(x))).ToArray
+            view = New CorridorViewForm(1)
+            view.Show()
+            view.Draw()
+            view.Close()
 
             Console.WriteLine("-----------------------------------------------------------------------------------------------------")
             Console.WriteLine("")

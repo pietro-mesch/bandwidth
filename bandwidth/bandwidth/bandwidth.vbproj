@@ -143,6 +143,7 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="CorridorViewer.vb" />
+    <Compile Include="GeneticSynchroniser.vb" />
     <Compile Include="m_main.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">

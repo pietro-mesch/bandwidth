@@ -136,7 +136,7 @@ Public Class t_CORRIDOR
         End Get
     End Property
 
-    Public Function ComputeGreenDuration(ByVal return_direction As Boolean) As Double()
+    Public Function GreenDuration(ByVal return_direction As Boolean) As Double()
         Dim duration(njunc - 1) As Double
         For j As Integer = 0 To njunc - 1
             If return_direction Then

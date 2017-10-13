@@ -57,59 +57,6 @@ Public Class BandMaximiser
     ''' </summary>
     Private n As Integer
 
-    'PM REM
-    'Public Sub New(ByVal cycl As Double, ByVal trav As Double(),
-    '               ByVal gini As Integer(), ByVal gend As Integer(),
-    '               Optional ByVal trav2 As Double() = Nothing,
-    '               Optional ByVal gini2 As Integer() = Nothing,
-    '               Optional ByVal gend2 As Integer() = Nothing)
-    '    'PM CHECK INPUT
-    '    If cycl <= 0 Then
-    '        Throw New ArgumentOutOfRangeException
-    '    End If
-
-    '    If gini.Length <> gend.Length Then
-    '        Throw New ArgumentException
-    '    End If
-    '    If gini2 IsNot Nothing OrElse gend2 IsNot Nothing Then
-    '        If gini2.Length <> gend.Length OrElse gend2.Length <> gend.Length Then
-    '            Throw New ArgumentException
-    '        End If
-    '    End If
-
-    '    If trav.Length <> gini.Length - 1 Then
-    '        Throw New ArgumentException
-    '    End If
-    '    If trav2 IsNot Nothing AndAlso trav2.Length <> gini.Length - 1 Then
-    '        Throw New ArgumentException
-    '    End If
-
-    '    n = gini.Length 'number of junctions
-
-    '    'PREPROCESSING
-    '    _C = cycl
-
-    '    'TRAVEL TIMES
-    '    _t = trav
-    '    If trav2 Is Nothing Then trav2 = trav.Select(Function(x) -x).ToArray
-    '    _t2 = trav2
-
-    '    'IF ONLY ONE SET OF GINIGEND WAS PROVIDED, ASSUME THAT THE THROUGH PHASE SERVES BOTH DIRECTIONS
-    '    'GREEN DURATION
-    '    _g = ComputeGreenDuration(gini, gend)
-    '    If gini2 Is Nothing AndAlso gend2 Is Nothing Then
-    '        gini2 = gini
-    '        gend2 = gend
-    '    End If
-    '    _g2 = ComputeGreenDuration(gini2, gend2)
-
-    '    'ABSOLUTE OFFSET
-    '    _t_o = ComputeAbsoluteOffsets(gini, gend)
-
-    '    'INTERNAL OFFSET
-    '    _t_d0 = ComputeInternalOffsets(gini, gend, gini2, gend2)
-
-    'End Sub
     Public Sub New(c As t_CORRIDOR)
 
         _theCorridor = c
@@ -129,8 +76,8 @@ Public Class BandMaximiser
 
         'IF ONLY ONE SET OF GINIGEND WAS PROVIDED, ASSUME THAT THE THROUGH PHASE SERVES BOTH DIRECTIONS
         'GREEN DURATION
-        _g = c.ComputeGreenDuration(False)
-        _g2 = c.ComputeGreenDuration(True)
+        _g = c.GreenDuration(False)
+        _g2 = c.GreenDuration(True)
 
         'ABSOLUTE OFFSET
         _t_o = c.AbsoluteOffset(False)
@@ -231,7 +178,7 @@ Public Class BandMaximiser
         Return offs
     End Function
 
-    Public Function GurobiOneWayOffsets() As Double()
+    Public Function GetOffsetsOneWayBand() As Double()
         Dim offs(n - 1) As Double
 
 #If DEBUG Then
@@ -318,12 +265,90 @@ Public Class BandMaximiser
         Return offs
     End Function
 
+    Public Function GetOffsetsOneWaySlackBand() As Double()
+        Dim offs(n - 1) As Double
+
+#If DEBUG Then
+        Console.WriteLine("One Way Slack Bandwidth Optimisation, fixed travel times, {0} junctions.", n)
+        'Dim time As New Stopwatch
+        'time.Start()
+#End If
+
+        'seems you CAN'T do this with a linear program
+
+
+        Dim B_real As Double = Double.PositiveInfinity
+        Dim B2_real As Double = Double.PositiveInfinity
+
+#If DEBUG Then
+        'time.Stop()
+        Console.WriteLine("Green duration : min = {0} s , MAX = {1} s", _g.Min, _g.Max)
+        Console.WriteLine("     secondary : min = {0} s , MAX = {1} s", _g2.Min, _g2.Max)
+
+        'Console.WriteLine("Solution time : {0} ms", time.ElapsedMilliseconds)
+        Console.WriteLine("Bandwidth 1 : {0:0} s [{1:0.0%}] --- {2:0} s [{3:0.0%}]", _B, _B / _g.Min, B_real, B_real / _g.Min)
+        Console.WriteLine("OFFSET VALUES:")
+        For j As Integer = 0 To n - 1
+            Console.Write("{0:0} ", offs(j))
+        Next
+        Console.WriteLine("")
+        Console.WriteLine("")
+#End If
+
+        'time = Nothing
+
+        Return offs
+    End Function
+
+    Public Function GetOffsetsOneWayBandGenetic() As Double()
+        Dim offs(n - 1) As Double
+
+#If DEBUG Then
+        Console.WriteLine("One Way Slack Bandwidth Optimisation, fixed travel times, {0} junctions.", n)
+#End If
+
+        Dim B_real As Double = Double.PositiveInfinity
+        Dim B2_real As Double = Double.PositiveInfinity
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#If DEBUG Then
+        'time.Stop()
+        Console.WriteLine("Green duration : min = {0} s , MAX = {1} s", _g.Min, _g.Max)
+        Console.WriteLine("     secondary : min = {0} s , MAX = {1} s", _g2.Min, _g2.Max)
+
+        'Console.WriteLine("Solution time : {0} ms", time.ElapsedMilliseconds)
+        Console.WriteLine("Bandwidth 1 : {0:0} s [{1:0.0%}]", _B, _B / _g.Min)
+        Console.WriteLine("OFFSET VALUES:")
+        For j As Integer = 0 To n - 1
+            Console.Write("{0:0} ", offs(j))
+        Next
+        Console.WriteLine("")
+        Console.WriteLine("")
+#End If
+
+        'time = Nothing
+
+        Return offs
+    End Function
+
     ''' <summary>
     ''' Calculate the offsets along the path that maximise the green bandwidth in the main direction only
     ''' </summary>
     ''' <param name="secondary_direction_weight"> the weight of the secondary bandwidth in the optimisation (0,1) </param>
     ''' <returns></returns>
-    Public Function GurobiTwoWayOffsets(Optional ByVal secondary_direction_weight As Double = 0.1) As Double()
+    Public Function GetOffsetsTwoWayBand(Optional ByVal secondary_direction_weight As Double = 0.1) As Double()
         Dim offs(n - 1) As Double
 
         If secondary_direction_weight > 1 Then Throw New ArgumentOutOfRangeException("The secondary bandwidth weight cannot be more than 1")
@@ -352,8 +377,8 @@ Public Class BandMaximiser
         Dim model As New GRBModel(env)
 
         'add variables
-        Dim b As GRBVar = model.AddVar(0, _g.Min, 0, GRB.CONTINUOUS, "main band")
-        Dim b2 As GRBVar = model.AddVar(0, _g2.Min, 0, GRB.CONTINUOUS, "return band")
+        Dim b As GRBVar = model.AddVar(Double.NegativeInfinity, _g.Min, 0, GRB.CONTINUOUS, "main band")
+        Dim b2 As GRBVar = model.AddVar(Double.NegativeInfinity, _g2.Min, 0, GRB.CONTINUOUS, "return band")
 
         'the relative offsets
         Dim w(n - 1) As GRBVar
@@ -379,7 +404,6 @@ Public Class BandMaximiser
                 If i <> j Then
                     model.AddConstr(b2 - w(i) + w(j) <= _g2(i) / 2 + _g2(j) / 2 + _t_d0(i) - _t_d0(j), String.Format("ret i{0}, j{1}", i, j))
                     'model.AddConstr(b2 - w(i) + w(j) <= _g2(i) / 2 + _g2(j) / 2 + modC(_t_d0(i) - _t_d0(j)), String.Format("ret i{0}, j{1}", i, j))
-
                 End If
             Next
         Next
@@ -389,6 +413,7 @@ Public Class BandMaximiser
         model.Optimize()
 
 #If DEBUG Then
+        'CHECK MODEL FEASIBILITY
         Select Case model.Status
             Case 2
                 'ALL GOOD
@@ -412,6 +437,15 @@ Public Class BandMaximiser
         _B = b.X
         _B2 = b2.X
 
+#If DEBUG Then
+        'CHECK BANDWIDTH CONSTRAINTS:
+        If b2.X < 0 Then
+            If Not _theCorridor.GreenDuration(True)(0) / 2 + _theCorridor.GreenDuration(True)(1) / 2 < Math.Abs(_theCorridor.InternalOffsetZero(0) - _theCorridor.InternalOffsetZero(1)) Then
+                Stop
+            End If
+            _theCorridor.Dump("infeasible.txt")
+        End If
+#End If
 
         Dim w0 As Double = w(0).X
         Dim to0 As Double = _t_o(0)
