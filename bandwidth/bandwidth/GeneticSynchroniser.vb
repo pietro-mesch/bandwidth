@@ -89,12 +89,19 @@
             Next
         Next
 
+    End Sub
 
+    Public Sub New(corridor As t_CORRIDOR, options As GSparameters)
+        Me.New(corridor)
+        _param = options
+        InitOptimisation
     End Sub
 
     Private Sub InitOptimisation()
         If _param.bandwidthType = BandwidthType.TwoWaySlack Then
             _status.maximising = True
+        Else
+            _status.maximising = False
         End If
 
         _status.initHistory(_param.maxGenWithoutImprovement)
@@ -147,10 +154,17 @@
         End While
 
         _theCorridor.offs = AbsoluteOffsets(_s(0))
+        _status.bandwidthMain = CalculateHardBandwidth(_s(0))
+        _status.bandwidthReturn = CalculateHardBandwidth(_s(0), True)
+
 
         'PM REM '''''''''''''''''
         time.Stop()
-        Console.WriteLine("Generation {0} : {1} ms - fitness {2}", _status.generation, time.ElapsedMilliseconds, _status.bestFitness)
+        Console.WriteLine("Generation {0} : {1} ms - fitness {2} ({3})", _status.generation, time.ElapsedMilliseconds, _status.bestFitness, [Enum].GetName(GetType(BandwidthType), _param.bandwidthType))
+
+        'Console.WriteLine("Solution time : {0} ms", time.ElapsedMilliseconds)
+        Console.WriteLine("Bandwidth 1 : {0:0} s [{1:0.0%}]", _status.bandwidthMain, _status.bandwidthMain / _g.Min)
+        Console.WriteLine("Bandwidth 2 : {0:0} s [{1:0.0%}]", _status.bandwidthReturn, _status.bandwidthReturn / _g2.Min)
         'Stop
         '''''''''''''''''''''''''
 
@@ -240,23 +254,42 @@
     Private Function CalculateIndividualFitness_OneWayHard(w() As Double) As Double
 
         'compute actual bandwidth
-        Dim fitness As Double = Double.PositiveInfinity
-        For i As Integer = 0 To _n - 1
-            For j As Integer = 0 To _n - 1
-                If i <> j Then
-                    fitness = Math.Min(fitness, w(i) - w(j) + _g(i) / 2 + _g(j) / 2)
-                End If
-            Next j
-        Next i
-        fitness = Math.Max(0, fitness)
-        fitness = Math.Min(_g.Min, fitness)
+        Dim fitness As Double = CalculateHardBandwidth(w)
 
         'the fitness index is the percent distance from the perfect bandwidth (just keeping it simple)
         Return 1 - fitness / _g.Min
 
     End Function
 
+    Private Function CalculateHardBandwidth(w() As Double, Optional ByVal ReturnDirection As Boolean = False) As Double
+        Dim fitness As Double = Double.PositiveInfinity
+        Dim green As Double()
+        Dim offset As Double()
+        If ReturnDirection Then
+            green = _g2
+            offset = _t_d0
+        Else
+            green = _g
+            ReDim offset(_n - 1)
+        End If
+
+        For i As Integer = 0 To _n - 1
+            For j As Integer = 0 To _n - 1
+                If i <> j Then
+                    fitness = Math.Min(fitness, w(i) - w(j) + green(i) / 2 + green(j) / 2 + offset(i) - offset(j))
+                End If
+            Next j
+        Next i
+        fitness = Math.Max(0, fitness)
+        fitness = Math.Min(green.Min, fitness)
+
+        Return fitness
+
+    End Function
+
     Private Function CalculateIndividualFitness_TwoWayHard(w() As Double) As Double
+
+        'PM CONVERT TO GENERAL FORMULA
 
         'compute bandwidth in both directions
         Dim f1 As Double = Double.PositiveInfinity
@@ -583,6 +616,9 @@
         ''' </summary>
         Public averageFitness As Double
 
+        Public bandwidthMain As Double = -1
+        Public bandwidthReturn As Double = -1
+
     End Class
 
     Public Enum BandwidthType
@@ -607,7 +643,7 @@
         Public crossoverPoints As Integer = 1
 
         Public bandwidthType As BandwidthType = BandwidthType.TwoWaySlack
-        Public secondaryBandWeight As Double = 0.5
+        Public secondaryBandWeight As Double = 0.4
     End Class
 #End Region
 

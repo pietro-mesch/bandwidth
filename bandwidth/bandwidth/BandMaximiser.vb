@@ -61,7 +61,7 @@ Public Class BandMaximiser
 
         _theCorridor = c
 
-        n = c.gini.Length 'number of junctions
+        n = c.njunc 'number of junctions
 
         'PREPROCESSING
         _C = c.cycl
@@ -300,48 +300,6 @@ Public Class BandMaximiser
         Return offs
     End Function
 
-    Public Function GetOffsetsOneWayBandGenetic() As Double()
-        Dim offs(n - 1) As Double
-
-#If DEBUG Then
-        Console.WriteLine("One Way Slack Bandwidth Optimisation, fixed travel times, {0} junctions.", n)
-#End If
-
-        Dim B_real As Double = Double.PositiveInfinity
-        Dim B2_real As Double = Double.PositiveInfinity
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#If DEBUG Then
-        'time.Stop()
-        Console.WriteLine("Green duration : min = {0} s , MAX = {1} s", _g.Min, _g.Max)
-        Console.WriteLine("     secondary : min = {0} s , MAX = {1} s", _g2.Min, _g2.Max)
-
-        'Console.WriteLine("Solution time : {0} ms", time.ElapsedMilliseconds)
-        Console.WriteLine("Bandwidth 1 : {0:0} s [{1:0.0%}]", _B, _B / _g.Min)
-        Console.WriteLine("OFFSET VALUES:")
-        For j As Integer = 0 To n - 1
-            Console.Write("{0:0} ", offs(j))
-        Next
-        Console.WriteLine("")
-        Console.WriteLine("")
-#End If
-
-        'time = Nothing
-
-        Return offs
-    End Function
 
     ''' <summary>
     ''' Calculate the offsets along the path that maximise the green bandwidth in the main direction only
@@ -436,16 +394,6 @@ Public Class BandMaximiser
         'extract values
         _B = b.X
         _B2 = b2.X
-
-#If DEBUG Then
-        'CHECK BANDWIDTH CONSTRAINTS:
-        If b2.X < 0 Then
-            If Not _theCorridor.GreenDuration(True)(0) / 2 + _theCorridor.GreenDuration(True)(1) / 2 < Math.Abs(_theCorridor.InternalOffsetZero(0) - _theCorridor.InternalOffsetZero(1)) Then
-                Stop
-            End If
-            _theCorridor.Dump("infeasible.txt")
-        End If
-#End If
 
         Dim w0 As Double = w(0).X
         Dim to0 As Double = _t_o(0)

@@ -73,7 +73,7 @@ Public Class t_CORRIDOR
             'LINK PROPERTIES
             If i > 0 Then distance(i) = distance(i - 1) + r.Next(150, 400)
             If i < njunc - 1 Then
-                sped(i) = (60 - r.Next(0, 21)) / 3.6
+                sped(i) = (80 - r.Next(0, 31)) / 3.6
                 sped2(i) = sped(i)
             End If
 
@@ -150,17 +150,22 @@ Public Class t_CORRIDOR
         Return duration
     End Function
 
+    ''' <summary>
+    ''' Absolute Offsets are calculated for the base program without offset.
+    ''' </summary>
+    ''' <param name="return_direction"></param>
+    ''' <returns> the distance of the midGreen instant from the cycle start</returns>
     Public Function AbsoluteOffset(ByVal return_direction As Boolean) As Double()
         Dim midpoint As Double
         Dim offset(njunc - 1) As Double
 
         Dim the_gini, the_gend As Integer()
         If return_direction Then
-            the_gini = Me.gini2
-            the_gend = Me.gend2
+            the_gini = Me._gini2
+            the_gend = Me._gend2
         Else
-            the_gini = Me.gini
-            the_gend = Me.gend
+            the_gini = Me._gini
+            the_gend = Me._gend
         End If
 
         For j As Integer = 0 To njunc - 1
