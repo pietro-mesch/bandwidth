@@ -3,7 +3,7 @@
     Sub Main()
         Console.SetWindowSize(125, 40)
         'test loop iterations
-        Dim nIte As Integer = 1
+        Dim nIte As Integer = 10
         'test number of junctions
         Dim n As Integer = 5
         ReDim corridor(1)
@@ -32,6 +32,8 @@
             view.Show()
             view.Draw()
             view.Close()
+
+            corridor(1) = New t_CORRIDOR(n)
         Next
 
         Dim opt As BandMaximiser

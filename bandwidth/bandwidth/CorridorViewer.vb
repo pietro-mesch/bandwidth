@@ -381,8 +381,6 @@ Public Class CorridorViewer
             PlotReturnBands(i)
             PlotMainBands(i)
             PlotThroughPhases(i)
-            'PM REM PLOTTING AT EACH ITERATION FOR DEBUG PURPOSES ONLY
-            _plotBox.Refresh()
         Next
 
     End Sub

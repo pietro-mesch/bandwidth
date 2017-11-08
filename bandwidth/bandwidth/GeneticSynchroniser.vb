@@ -484,7 +484,7 @@
     End Sub
 
     Private Function MutateChromosome(original As Double) As Double
-        'PM THIS MUTATION SCHEME IS STUPID
+        'PM THIS MUTATION SCHEME IS NAIVE
         Dim r As New Random(Now.Millisecond)
 
         'apply random mutation between -5 and +5
